@@ -8,21 +8,22 @@ import requests
 import time
 import math
 
-def to_size(size):
-   if (size == 0):
-       return '0 Bytes'
-   size_name = ('Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB')
-   i = int(math.floor(math.log(size,1024)))
-   p = math.pow(1024,i)
-   s = round(size/p,2)
-   return '%s %s' % (s,size_name[i])
+hostname = 'hi.link'
 
+def to_size(size):
+    if (size == 0):
+        return '0 Bytes'
+    size_name = ('Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB')
+    i = int(math.floor(math.log(size, 1024)))
+    p = math.pow(1024, i)
+    s = round(size / p, 2)
+    return '%s %s' % (s, size_name[i])
 
 def is_hilink(device_ip):
     try:
-        r = requests.get(url='http://' + device_ip + '/api/device/information', allow_redirects=False, timeout=(2.0,2.0))
-    except requests.exceptions.RequestException as e:
-        return False;
+        r = requests.get(url='http://' + device_ip + '/api/device/information', headers={'Host': hostname}, allow_redirects=False, timeout=(2.0,2.0))
+    except requests.exceptions.RequestException:
+        return False
 
     if r.status_code != 200:
         return False
@@ -31,35 +32,35 @@ def is_hilink(device_ip):
 def get_token(device_ip):
     token = None
     try:
-        r = requests.get(url='http://' + device_ip + '/api/webserver/token', allow_redirects=False, timeout=(2.0,2.0))
-    except requests.exceptions.RequestException as e:
+        r = requests.get(url='http://' + device_ip + '/api/webserver/token', headers={'Host': hostname}, allow_redirects=False, timeout=(2.0,2.0))
+    except requests.exceptions.RequestException:
         return token
-    try:        
+    try:
         d = xmltodict.parse(r.text, xml_attribs=True)
         if 'response' in d and 'token' in d['response']:
             token = d['response']['token']
-    except:
+    except Exception:
         pass
     return token
-    
+
 
 def call_api(device_ip, token, resource, xml_attribs=True):
     headers = {}
     if token is not None:
-        headers = {'__RequestVerificationToken': token}
+        headers = {'Host': hostname, '__RequestVerificationToken': token}
     try:
         r = requests.get(url='http://' + device_ip + resource, headers=headers, allow_redirects=False, timeout=(2.0,2.0))
     except requests.exceptions.RequestException as e:
-        print ("Error: "+str(e))
-        return False;
+        print ("Error: " + str(e))
+        return False
 
     if r.status_code == 200:
         d = xmltodict.parse(r.text, xml_attribs=xml_attribs)
         if 'error' in d:
             raise Exception('Received error code ' + d['error']['code'] + ' for URL ' + r.url)
-        return d            
+        return d
     else:
-      raise Exception('Received status code ' + str(r.status_code) + ' for URL ' + r.url)
+        raise Exception('Received status code ' + str(r.status_code) + ' for URL ' + r.url)
 
 def get_connection_status(status):
     result = 'n/a'
@@ -161,7 +162,7 @@ def get_signal_level(level):
         result = u'\u2581' + u'\u2583' + u'\u2584' + u'\u2586'
     if level == '5':
         result = u'\u2581' + u'\u2583' + u'\u2584' + u'\u2586' + u'\u2588'
-    return result
+    return result.encode('utf-8')
 
 def print_traffic_statistics(device_ip, token, connection_status):
     d = call_api(device_ip, token, '/api/monitoring/traffic-statistics')
@@ -207,7 +208,7 @@ def print_connection_status(device_ip, token):
             print('')
         print('    Roaming: ' + get_roaming_status(roaming_status))
         if wan_ip is not None:
-            print('    Modem WAN IP address: ' +  wan_ip)
+            print('    Modem WAN IP address: ' + wan_ip)
         if public_ip is not None:
             print('    Public IP address: ' + public_ip)
         print('    DNS IP addresses: ' + primary_dns_ip + ', ' + secondary_dns_ip)
@@ -227,7 +228,7 @@ def print_device_info(device_ip, token):
     mac_address1 = d['response']['MacAddress1']
     mac_address2 = d['response']['MacAddress2']
     product_family = d['response']['ProductFamily']
- 
+
     print('Huawei ' + device_name + ' ' + product_family + ' Modem (IMEI: ' + imei + ')')
     print('  Hardware version: ' + hardware_version)
     print('  Software version: ' + software_version)
@@ -242,7 +243,7 @@ def print_device_info(device_ip, token):
 def print_provider(device_ip, token, connection_status):
     if connection_status == '901':
         d = call_api(device_ip, token, '/api/net/current-plmn')
-        state = d['response']['State']
+        # state = d['response']['State']
         provider_name = d['response']['FullName']
         print('    Network operator: ' + provider_name)
 
@@ -252,7 +253,9 @@ def print_unread(device_ip, token):
     if unread_messages is not None and int(unread_messages) > 0:
         print('  Unread SMS: ' + unread_messages)
 
+
 device_ip = '192.168.1.1'
+
 if len(sys.argv) == 2:
     device_ip = sys.argv[1]
     if not is_hilink(device_ip):
